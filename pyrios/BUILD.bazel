@@ -1,0 +1,19 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_binary", "go_library")
+
+go_library(
+    name = "go_default_library",
+    srcs = ["main.go"],
+    importpath = "github.com/GoogleCloudPlatform/gke-enterprise-demo/pyrios",
+    visibility = ["//visibility:private"],
+    deps = [
+        "@com_google_cloud_go//compute/metadata:go_default_library",
+        "@io_opencensus_go//trace:go_default_library",
+        "@io_opencensus_go_contrib_exporter_stackdriver//:go_default_library",
+    ],
+)
+
+go_binary(
+    name = "pyrios",
+    embed = [":go_default_library"],
+    visibility = ["//visibility:public"],
+)
