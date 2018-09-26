@@ -1,4 +1,33 @@
 load("@io_bazel_rules_go//go:def.bzl", "go_binary", "go_library")
+load("@io_bazel_rules_docker//go:image.bzl", "go_image")
+load("@io_bazel_rules_docker//container:container.bzl", "container_push", "container_image")
+
+go_image(
+    name = "pyrios_image_base",
+    embed = [":go_default_library"],
+)
+
+# wrapper image used to expose ports to the underlying go_image
+container_image(
+    name = "pyrios_image",
+    base = ":pyrios_image_base",
+    ports = ["9200"],
+)
+
+container_push(
+    name = "push",
+    format = "Docker",
+    image = ":pyrios_image",
+    registry = "gcr.io",
+    repository = "ehole-supermassive-blackhole/pyrios",
+    tag = "master",  # don't do this on production image :)
+)
+
+go_binary(
+    name = "pyrios",
+    embed = [":go_default_library"],
+    visibility = ["//visibility:public"],
+)
 
 go_library(
     name = "go_default_library",
@@ -10,10 +39,4 @@ go_library(
         "@io_opencensus_go//trace:go_default_library",
         "@io_opencensus_go_contrib_exporter_stackdriver//:go_default_library",
     ],
-)
-
-go_binary(
-    name = "pyrios",
-    embed = [":go_default_library"],
-    visibility = ["//visibility:public"],
 )

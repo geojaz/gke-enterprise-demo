@@ -1,4 +1,34 @@
-load("@io_bazel_rules_go//go:def.bzl", "go_binary", "go_library")
+load("@io_bazel_rules_go//go:def.bzl", "go_library", "go_binary")
+load("@io_bazel_rules_docker//go:image.bzl", "go_image")
+load("@io_bazel_rules_docker//container:container.bzl", "container_push", "container_image")
+
+go_image(
+    name = "pyrios_ui_image_base",
+    embed = [":go_default_library"],
+)
+
+# wrapper image used to expose ports to the underlying go_image
+container_image(
+    name = "pyrios_ui_image",
+    base = ":pyrios_ui_image_base",
+    ports = ["9200"],
+)
+
+container_push(
+    name = "push",
+    format = "Docker",
+    image = ":pyrios_ui_image",
+    registry = "gcr.io",
+    repository = "ehole-supermassive-blackhole/pyrios-ui",
+    tag = "master",  # don't do this on production image :)
+)
+
+go_binary(
+    name = "pyyrios-ui",
+    embed = [":go_default_library"],
+    visibility = ["//visibility:public"],
+)
+
 
 go_library(
     name = "go_default_library",
@@ -9,17 +39,11 @@ go_library(
         "@com_github_tidwall_gjson//:go_default_library",
         "@com_google_cloud_go//compute/metadata:go_default_library",
         "@com_google_cloud_go//monitoring/apiv3:go_default_library",
+        "@go_googleapis//google/api:metric_go_proto",
+        "@go_googleapis//google/api:monitoredres_go_proto",
+        "@go_googleapis//google/monitoring/v3:monitoring_go_proto",
         "@io_bazel_rules_go//proto/wkt:timestamp_go_proto",
         "@io_opencensus_go//trace:go_default_library",
         "@io_opencensus_go_contrib_exporter_stackdriver//:go_default_library",
-        "@org_golang_google_genproto//googleapis/api/metric:go_default_library",
-        "@org_golang_google_genproto//googleapis/api/monitoredres:go_default_library",
-        "@org_golang_google_genproto//googleapis/monitoring/v3:go_default_library",
     ],
-)
-
-go_binary(
-    name = "pyrios-ui",
-    embed = [":go_default_library"],
-    visibility = ["//visibility:public"],
 )
