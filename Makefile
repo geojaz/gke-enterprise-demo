@@ -12,9 +12,15 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-PROJECT := $(shell gcloud config get-value core/project)
-ROOT := ${CURDIR}
-SHELL := /usr/bin/env bash
+PROJECT:=$(shell gcloud config get-value core/project)
+ROOT:= ${CURDIR}
+SHELL:=/usr/bin/env bash
+BAZEL_OPTIONS?=
+PYRIOS_DOCKER_REPO?=gcr.io/pso-examples/pyrios
+PYRIOS_UI_DOCKER_REPO?=gcr.io/pso-examples/pyrios-ui
+PYRIOS_VERSION?=latest
+PYRIOS_UI_VERSION?=latest
+
 
 # All is the first target in the file so it will get picked up when you just run 'make' on its own
 linting: check_shell check_python check_golang check_terraform check_docker check_base_files check_headers check_trailing_whitespace
@@ -118,3 +124,60 @@ expose-ui:
 .PHONY: teardown
 teardown:
 	$(ROOT)/teardown.sh
+
+.PHONY: push-pyrios
+push-pyrios:
+	docker push ${PYRIOS_DOCKER_REPO}:${PYRIOS_VERSION}
+
+.PHONY: push-pyrios-ui
+push-pyrios-ui:
+	docker push ${PYRIOS_UI_DOCKER_REPO}:${PYRIOS_UI_VERSION}	
+
+
+################################################################################################
+# Bazel new world order 9/26/18                                         #
+################################################################################################
+
+.PHONY: bazel-test
+bazel-test:
+	bazel ${BAZEL_OPTIONS} test //pyrios/... //pyrios-ui/...
+
+# build for your host OS, for local development/testing (not in docker)
+.PHONY: bazel-build-pyrios
+bazel-build-pyrios:
+	bazel ${BAZEL_OPTIONS} build --features=pure //pyrios/...
+
+.PHONY: bazel-build-pyrios-ui
+bazel-build-pyrios-ui:
+	bazel ${BAZEL_OPTIONS} build --features=pure //pyrios-ui/...	
+
+.PHONY: bazel-build
+bazel-build: bazel-build-pyrios bazel-build-pyrios-ui
+
+# docker via bazel
+# .PHONY: bazel-build-pyrios-linux
+# bazel-build-pyrios-linux:
+# 	bazel build --features=pure --platforms=@io_bazel_rules_go//go/toolchain:linux_amd64 //pyrios/...
+
+# .PHONY: bazel-build-pyrios-ui-linux
+# bazel-build-pyrios-ui-linux:
+# 	bazel build --features=pure --platforms=@io_bazel_rules_go//go/toolchain:linux_amd64 //pyrios-ui/...
+
+.PHONY: bazel-build-pyrios-image
+bazel-build-pyrios-image:
+	bazel run ${BAZEL_OPTIONS} --platforms=@io_bazel_rules_go//go/toolchain:linux_amd64 //pyrios:go_image
+
+.PHONY: bazel-build-pyrios-ui-image
+bazel-build-pyrios-ui-image:
+	bazel run ${BAZEL_OPTIONS} --platforms=@io_bazel_rules_go//go/toolchain:linux_amd64 //pyrios-ui:go_image
+
+.PHONY: bazel-build-images
+bazel-build-pyrios-image: bazel-build-pyrios-image bazel-build-pyrios-ui-image
+
+.PHONY: bazel-tag-pyrios
+bazel-tag-pyrios:
+	docker tag bazel/pyrios:go_image "${PYRIOS_DOCKER_REPO}:${PYRIOS_VERSION}"
+
+.PHONY: run-pyr
+bazel-tag-pyrios:
+	docker tag bazel/pyrios:go_image "${PYRIOS_DOCKER_REPO}:${PYRIOS_VERSION}"

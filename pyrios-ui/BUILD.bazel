@@ -3,32 +3,32 @@ load("@io_bazel_rules_docker//go:image.bzl", "go_image")
 load("@io_bazel_rules_docker//container:container.bzl", "container_push", "container_image")
 
 go_image(
-    name = "pyrios_ui_image_base",
+    name = "go_image_base",
     embed = [":go_default_library"],
 )
 
 # wrapper image used to expose ports to the underlying go_image
 container_image(
-    name = "pyrios_ui_image",
-    base = ":pyrios_ui_image_base",
+    name = "go_image",
+    base = ":go_image_base",
     ports = ["9200"],
 )
 
+# todo: deprecate this and pull into Makefile?
 container_push(
     name = "push",
     format = "Docker",
-    image = ":pyrios_ui_image",
+    image = ":go_image",
     registry = "gcr.io",
-    repository = "ehole-supermassive-blackhole/pyrios-ui",
-    tag = "master",  # don't do this on production image :)
+    repository = "pso-examples/pyrios",
+    tag = "ehole-latest",
 )
 
 go_binary(
-    name = "pyyrios-ui",
+    name = "pyrios-ui",
     embed = [":go_default_library"],
     visibility = ["//visibility:public"],
 )
-
 
 go_library(
     name = "go_default_library",
