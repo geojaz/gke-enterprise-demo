@@ -180,11 +180,11 @@ gcloud config set project <PROJECT_ID>
 
 ## Enable the GCP Services
 
-Please enable the GCP services by running `make bootstrap`. The command
+Please enable the GCP services by running `make gcp-deps`. The command
 runs like the following:
 
 ```console
-make bootstrap
+make gcp-dep
 ```
 
 Example output:

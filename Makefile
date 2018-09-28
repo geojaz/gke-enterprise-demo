@@ -13,55 +13,55 @@
 # limitations under the License.
 
 PROJECT := $(shell gcloud config get-value core/project)
-ROOT := ${CURDIR}
+ROOT := ${CURDIR}/
 SHELL := /usr/bin/env bash
 
-# All is the first target in the file so it will get picked up when you just run 'make' on its own
-linting: check_shell check_python check_golang check_terraform check_docker check_base_files check_headers check_trailing_whitespace
-
-# The .PHONY directive tells make that this isn't a real target and so
-# the presence of a file named 'check_shell' won't cause this target to stop
-# working
-.PHONY: check_shell
-check_shell:
-	@source test/make.sh && check_shell
-
-.PHONY: check_python
-check_python:
-	@source test/make.sh && check_python
-
-.PHONY: check_golang
-check_golang:
-	@source test/make.sh && golang
-
-.PHONY: check_terraform
-check_terraform:
-	@source test/make.sh && check_terraform
-
-.PHONY: check_docker
-check_docker:
-	@source test/make.sh && docker
-
-.PHONY: check_base_files
-check_base_files:
-	@source test/make.sh && basefiles
-
-.PHONY: check_shebangs
-check_shebangs:
-	@source test/make.sh && check_bash
-
-.PHONY: check_trailing_whitespace
-check_trailing_whitespace:
-	@source test/make.sh && check_trailing_whitespace
-
-.PHONY: check_headers
-check_headers:
-	@echo "Checking file headers"
-	@python test/verify_boilerplate.py
-# Step 1: bootstrap is used to make sure all the GCP service below are enabled
-# prior to the terraform step
-.PHONY: bootstrap
-bootstrap:
+# # All is the first target in the file so it will get picked up when you just run 'make' on its own
+# linting: check_shell check_python check_golang check_terraform check_docker check_base_files check_headers check_trailing_whitespace
+#
+# # The .PHONY directive tells make that this isn't a real target and so
+# # the presence of a file named 'check_shell' won't cause this target to stop
+# # working
+# .PHONY: check_shell
+# check_shell:
+# 	@source hack/make.sh && check_shell
+#
+# .PHONY: check_python
+# check_python:
+# 	@source hack/make.sh && check_python
+#
+# .PHONY: check_golang
+# check_golang:
+# 	@source hack/make.sh && golang
+#
+# .PHONY: check_terraform
+# check_terraform:
+# 	@source hack/make.sh && check_terraform
+#
+# .PHONY: check_docker
+# check_docker:
+# 	@source hack/make.sh && docker
+#
+# .PHONY: check_base_files
+# check_base_files:
+# 	@source hack/make.sh && basefiles
+#
+# .PHONY: check_shebangs
+# check_shebangs:
+# 	@source hack/make.sh && check_bash
+#
+# .PHONY: check_trailing_whitespace
+# check_trailing_whitespace:
+# 	@source hack/make.sh && check_trailing_whitespace
+#
+# .PHONY: check_headers
+# check_headers:
+# 	@echo "Checking file headers"
+# 	@python hack/verify_boilerplate.py
+# # Step 1: bootstrap is used to make sure all the GCP service below are enabled
+# # prior to the terraform step
+.PHONY: gcp-deps
+gcp-deps:
 	gcloud services enable \
 	  cloudresourcemanager.googleapis.com \
 	  compute.googleapis.com \
@@ -71,9 +71,22 @@ bootstrap:
 	  logging.googleapis.com \
 	  bigquery-json.googleapis.com
 
+.PHONY: project-fmt
+project-fmt:
+	# go fmt
+	gofmt -s -w
+  # terraform fmt
+	terraform fmt
+
+.PHONY: project-fmt
+project-fmt:
+
+
+
+
 # Step 2: terraform is used to automate the terraform workflow
-.PHONY: terraform
-terraform:
+.PHONY: deploy-infra
+deploy-infra:
 	terraform fmt
 	terraform validate -check-variables=false
 	terraform init
