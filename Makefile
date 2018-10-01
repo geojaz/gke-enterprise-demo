@@ -16,52 +16,19 @@ PROJECT := $(shell gcloud config get-value core/project)
 ROOT := ${CURDIR}/
 SHELL := /usr/bin/env bash
 
-# # All is the first target in the file so it will get picked up when you just run 'make' on its own
-# linting: check_shell check_python check_golang check_terraform check_docker check_base_files check_headers check_trailing_whitespace
-#
-# # The .PHONY directive tells make that this isn't a real target and so
-# # the presence of a file named 'check_shell' won't cause this target to stop
-# # working
-# .PHONY: check_shell
-# check_shell:
-# 	@source hack/make.sh && check_shell
-#
-# .PHONY: check_python
-# check_python:
-# 	@source hack/make.sh && check_python
-#
-# .PHONY: check_golang
-# check_golang:
-# 	@source hack/make.sh && golang
-#
-# .PHONY: check_terraform
-# check_terraform:
-# 	@source hack/make.sh && check_terraform
-#
-# .PHONY: check_docker
-# check_docker:
-# 	@source hack/make.sh && docker
-#
-# .PHONY: check_base_files
-# check_base_files:
-# 	@source hack/make.sh && basefiles
-#
-# .PHONY: check_shebangs
-# check_shebangs:
-# 	@source hack/make.sh && check_bash
-#
-# .PHONY: check_trailing_whitespace
-# check_trailing_whitespace:
-# 	@source hack/make.sh && check_trailing_whitespace
-#
-# .PHONY: check_headers
-# check_headers:
-# 	@echo "Checking file headers"
-# 	@python hack/verify_boilerplate.py
-# # Step 1: bootstrap is used to make sure all the GCP service below are enabled
-# # prior to the terraform step
-.PHONY: gcp-deps
-gcp-deps:
+# default bazel go containers don't even have a shell to exec into for debugging. 
+# -c dbg gives you busybox. comment it out for production
+DEBUG?=-c dbg
+
+# add any bazel build options here
+BAZEL_OPTIONS?=
+
+IMAGE_REGISTRY?=gcr.io
+PYRIOS_REPO?=pso-examples/pyrios
+PYRIOS_UI_REPO?=pso-examples/pyrios-ui
+
+.PHONY: bootstrap
+bootstrap:
 	gcloud services enable \
 	  cloudresourcemanager.googleapis.com \
 	  compute.googleapis.com \
@@ -70,19 +37,6 @@ gcp-deps:
 	  containerregistry.googleapis.com \
 	  logging.googleapis.com \
 	  bigquery-json.googleapis.com
-
-.PHONY: project-fmt
-project-fmt:
-	# go fmt
-	gofmt -s -w
-  # terraform fmt
-	terraform fmt
-
-.PHONY: project-fmt
-project-fmt:
-
-
-
 
 # Step 2: terraform is used to automate the terraform workflow
 .PHONY: deploy-infra
@@ -131,3 +85,107 @@ expose-ui:
 .PHONY: teardown
 teardown:
 	$(ROOT)/teardown.sh
+
+# .PHONY: push-pyrios
+# push-pyrios:
+# 	docker push ${PYRIOS_DOCKER_REPO}:${PYRIOS_VERSION}
+
+# .PHONY: push-pyrios-ui
+# push-pyrios-ui:
+# 	docker push ${PYRIOS_UI_DOCKER_REPO}:${PYRIOS_UI_VERSION}	
+
+
+################################################################################################
+#                      Bazel new world order 9/26/18                                           #
+################################################################################################
+.PHONY: bazel-clean
+bazel-clean:
+	bazel clean --expunge
+
+.PHONY: bazel-test
+bazel-test:
+	bazel ${BAZEL_OPTIONS} test //pyrios/... //pyrios-ui/... //hack:verify-all --test_output=errors
+
+# build for your host OS, for local development/testing (not in docker)
+.PHONY: bazel-build-pyrios
+bazel-build-pyrios:
+	bazel build ${BAZEL_OPTIONS} --features=pure //pyrios/...
+
+.PHONY: bazel-build-pyrios-ui
+bazel-build-pyrios-ui:
+	bazel build ${BAZEL_OPTIONS} --features=pure //pyrios-ui/...	
+
+.PHONY: bazel-build
+bazel-build: bazel-build-pyrios bazel-build-pyrios-ui
+
+.PHONY: bazel-build-pyrios-image
+bazel-build-pyrios-image:
+	bazel run ${BAZEL_OPTIONS} ${DEBUG} \
+		--platforms=@io_bazel_rules_go//go/toolchain:linux_amd64 \
+		--define REGISTRY=${IMAGE_REGISTRY} \
+		--define REPOSITORY=${PYRIOS_REPO} \
+		--define TAG=${PYRIOS_TAG} \
+		//app_repos/pyrios:go_image
+
+.PHONY: bazel-build-pyrios-ui-image
+bazel-build-pyrios-ui-image:
+	bazel run ${BAZEL_OPTIONS} ${DEBUG} \
+		--platforms=@io_bazel_rules_go//go/toolchain:linux_amd64 \
+		--define REGISTRY=${IMAGE_REGISTRY} \
+		--define REPOSITORY=${PYRIOS_UI_REPO} \
+		--define TAG=${PYRIOS_UI_TAG} \
+		//pyrios-ui:go_image
+
+.PHONY: bazel-build-images
+bazel-build-images: bazel-build-pyrios-image bazel-build-pyrios-ui-image
+
+.PHONY: bazel-push-pyrios
+bazel-push-pyrios:
+	bazel run ${BAZEL_OPTIONS} ${DEBUG} \
+		--platforms=@io_bazel_rules_go//go/toolchain:linux_amd64 \
+		--define REGISTRY=${IMAGE_REGISTRY} \
+		--define REPOSITORY=${PYRIOS_REPO} \
+		--define TAG=${PYRIOS_TAG} \
+		--define BUILD_USER="${BUILD_USER}" \
+		//app_repos/pyrios:push			
+
+.PHONY: bazel-push-pyrios-ui
+bazel-push-pyrios-ui:
+	bazel run ${BAZEL_OPTIONS} ${DEBUG} \
+		--platforms=@io_bazel_rules_go//go/toolchain:linux_amd64 \
+        --define REGISTRY=${IMAGE_REGISTRY} \
+		--define REPOSITORY=${PYRIOS_UI_REPO} \
+		--define TAG=${PYRIOS_UI_TAG} \
+		//app_repos/pyrios-ui:push
+
+.PHONY: bazel-push-images
+bazel-push-images: bazel-push-pyrios bazel-push-pyrios-ui
+
+# .PHONY: bazel-deploy-pyrios
+# bazel-deploy-pyrios: 
+# 	bazel run ${BAZEL_OPTIONS} \
+# 	    --platforms=@io_bazel_rules_go//go/toolchain:linux_amd64 \
+# 		//app_repos/pyrios :dev.create		
+#       --define REGISTRY=${IMAGE_REGISTRY} \
+#		--define REPOSITORY=${PYRIOS_REPO} \
+		
+
+bazel-push-images: bazel-push-pyrios bazel-push-pyrios-ui
+
+################################################################################################
+#                                 kubernetes helpers                                           #
+################################################################################################
+
+.PHONY: deploy
+deploy:
+	kubectl apply -f pyrios/manifests/
+	kubectl apply -f pyrios-ui/manifests/
+
+################################################################################################
+#                                 testing helpers                                              #
+################################################################################################
+
+.PHONY: gofmt
+gofmt:
+	gofmt -s -w pyrios-ui/
+	gofmt -s -w pyrios/
